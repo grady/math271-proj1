@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(magrittr)
 library(rvest)
+
 library(lubridate)
 ```
 
@@ -40,7 +41,7 @@ Visit the `timeanddate.com` link above in your browser, then right click on the 
 
 Make sure the devtools window has the "Elements" tab selected, where the DOM is displayed. You can expand and contract the DOM tree using the triangles. Selecting and hovering over elements in the Dev Tools will highlight the element in the page view.
 
-Our goal is to be able to identify the elements containing the data we want to extract. Data is often stored in a `table` element. Locate the Elements with the LOTR data tables.
+Our goal is to be able to identify the elements containing the data we want to extract. Data is often stored in a `table` element. Locate the Elements with the weather data tables.
 
 We will extract the data by constructing a [CSS selector](https://www.w3schools.com/cssref/css_selectors.asp) that will grab only the data from the webpage.
 
@@ -51,9 +52,25 @@ In this case we are lucky and the data table has a unique id, `id="wt-his"` whic
 We use the `rvest` functions `html_node` to extract the table from the page, and `html_table` to process the table into a data frame.
 
 ```{r}
-raw_html %>% html_node("#wt-his") %>% html_table(header=FALSE)
+raw_html %>% html_node("#wt-his") %>% html_table(header=FALSE) %>%
+    set_colnames(., slice(.,2)) %>% repair_names() %>% slice(3:(n()-1)) %>% 
+    select(-V1, -V2) %>% 
+    # mutate(Temp = str_extract(Temp, "\\d+")) %>% 
+    mutate(across(Temp|Wind:Visibility, str_extract, "\\d+" )) %>% type_convert()
+    
 ```
+
 Now the challenge of wrangling this data into shape begins.
+
+- header values (in row 2) to column names
+- drop the header rows from the data
+- strip units and convert to numbers
+- oh god, look at the time
+    - split Time into two columns
+    - fill in missing date values
+    - parse the times and dates into a proper date-time object/format
+
+
 
 
 ```{r, include=FALSE}
@@ -62,7 +79,7 @@ raw_html %>%
     html_table(header = FALSE) %>% 
     set_colnames(.,.[2,]) %>% 
     repair_names() %>% 
-    slice(3:(n()-1)) %>%
+    slice(3:(n()-1)) %>% #select(Time)
     separate(Time,c("Time", "Date"), "(?<=[ap]m)") %>% 
     mutate(Date=na_if(Date, "")) %>% 
     fill(Date) %>% 
@@ -74,6 +91,17 @@ raw_html %>%
     mutate(dt=parse_date_time(paste(Time, Date),"hMpamd", "Pacific/Honolulu")) %>% 
     type_convert()
 ```
+
+## Regular Expressions
+
+Regular expressions are a language for describing a pattern searches in text strings. A regular expression is itself a text string. 
+
+- Interactive regex tutorial: https://regexone.com/
+- Regex building and testing: https://regex101.com/
+- https://rpubs.com/rudeboybert/MATH241_regex
+- https://en.wikipedia.org/wiki/Regular_expression
+
+`select` the column you want to work on, print it out, and copy the column of data into regex101.com. Experiment with the regex until it matches what you want it to. 
 
 
 ## Stylin' with CSS
@@ -93,11 +121,27 @@ A full guide to what you can achieve with CSS styling can be found here: https:/
 
 Notice that the _code chunk_ above is not a `{r}` chunk, but a `{css}` chunk. This tells the Knitr that this is CSS code, not R code, and it will handle it differently. Setting the chunk option `echo=FALSE` is a common thing to do with CSS chunks.
 
+## Other `html_document` options
+
+There are many options that you can set in the document options at the top of your Rmd file. These include things like color themes, the creation of a table of contents, changing how data tables are printed in the output, and more. See the reference link below:
+
+https://bookdown.org/yihui/rmarkdown/html-document.html
+
+## Other output formats
+
+Although Rmd specializes in producing html output documents, it can also produce other types of output file, such as a PDF, Word file, several types of slideshow output, and even things like data dashboards. Using these is as simple as replacing the `html_document` line in the document options to something else
+
+https://rmarkdown.rstudio.com/lesson-9.html#documents
+
+The `rmdformats` package provides a few different html output document styles as well: https://github.com/juba/rmdformats
+
+Chapters 3 through 14 of the Rmarkdown book desribe some of these output formats in greater detail: https://bookdown.org/yihui/rmarkdown/documents.html
+
 ## Other Language Chunks
 
 This section is mostly for informational purposes, I've never used these features in practice.
 
-The Knitr markdown processor recognizes a few other languagues, below is an example of a `{python}` language chunk. Python chunks are processed similarly to R chunks, with the commands executed and results inserted in the output document.
+The Knitr markdown processor recognizes a few other languages, below is an example of a `{python}` language chunk. Python chunks are processed similarly to R chunks, with the commands executed and results inserted in the output document.
 
 ```{python, python.reticulate=FALSE}
 import sys
@@ -110,3 +154,4 @@ For html output formats, the `{js}` language is available, this code is differen
 $("<p>This content added in browser by JavaScript.</p>").appendTo(".main-container")
 ```
 
+More info in the Rmarkdown book: https://bookdown.org/yihui/rmarkdown/language-engines.html
