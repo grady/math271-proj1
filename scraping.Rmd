@@ -2,9 +2,10 @@
 title: "Data Scraping with rvest"
 author: "Math 271"
 date: "Spring 22"
-output: 
-    html_document:
-        css: lab.css
+output:
+  html_document:
+    css: lab.css
+    toc: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -55,9 +56,10 @@ We use the `rvest` functions `html_node` to extract the table from the page, and
 raw_html %>% html_node("#wt-his") %>% html_table(header=FALSE) %>%
     set_colnames(., slice(.,2)) %>% repair_names() %>% slice(3:(n()-1)) %>% 
     select(-V1, -V2) %>% 
-    # mutate(Temp = str_extract(Temp, "\\d+")) %>% 
-    mutate(across(Temp|Wind:Visibility, str_extract, "\\d+" )) %>% type_convert()
-    
+    # mutate(Temp = str_extract(Temp, "\\d+")) #%>% 
+    mutate(across(Temp|Wind:Visibility, str_extract, "\\d+" )) %>% type_convert() %>% 
+    separate(Time, c("Time", "Date"), "(?<=[ap]m)") %>% mutate(Date=na_if(Date,"")) %>% fill(Date) %>% 
+    mutate(dt=paste(Time, Date) %>% parse_date_time("hMpamd", tz="Pacific/Honolulu"))
 ```
 
 Now the challenge of wrangling this data into shape begins.
